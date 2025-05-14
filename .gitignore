@@ -1,0 +1,11 @@
+# Ignore virtual environment directory
+/venv/
+
+# Ignore vscode setting directory
+/.vscode/
+
+# Ignore data directory
+/data/
+
+# Ignore design doc
+design_doc.txt
