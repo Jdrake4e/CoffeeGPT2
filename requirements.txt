@@ -1,0 +1,16 @@
+# pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+numpy
+pandas
+tqdm
+matplotlib
+seaborn
+hydra-core
+scikit-learn
+statsmodels
+mlflow
+pytorch-lightning
+dvc
+pre-commit
+black
+isort
+--extra-index-url https://pypi.ngc.nvidia.com
