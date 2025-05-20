@@ -9,4 +9,9 @@
 
 # Ignore design doc
 design_doc.txt
+
+# Ignore logs directory
+/logs
+
+# Added by dvc
 /data
