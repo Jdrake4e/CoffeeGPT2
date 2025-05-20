@@ -4,7 +4,9 @@ from typing import Dict, List, Union
 import pandas as pd
 
 
-def futures_readin_bind(files: List[Union[str, os.PathLike]]) -> pd.DataFrame:
+def futures_readin_bind(files: List[os.PathLike]) -> pd.DataFrame:
+    """Read in multiple historical market data CSV files from investing.com and bind them into a single DataFrame."""
+
     dfs = []
     for file in files:
         dfs.append(pd.read_csv(file))
@@ -53,6 +55,8 @@ def futures_readin_bind(files: List[Union[str, os.PathLike]]) -> pd.DataFrame:
 def load_commodity_futures_by_folder(
     root_dir: Union[str, os.PathLike]
 ) -> Dict[str, pd.DataFrame]:
+    """Load all csv datasets from a root directory provided as thier own independedent data frames storeded in a dictionary with the folder name as the key"""
+
     data_dict = {}
     for folder in os.listdir(root_dir):
         folder_path = os.path.join(root_dir, folder)
