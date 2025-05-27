@@ -5,6 +5,7 @@ from typing import Dict, List, Union
 import polars as pl
 
 # TODO Validate all inputs
+# TODO add function to load preprocessed data
 
 
 def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
