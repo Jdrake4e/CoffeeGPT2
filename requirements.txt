@@ -9,6 +9,7 @@ scikit-learn
 statsmodels
 mlflow
 pytorch-lightning
+polars
 dvc
 pre-commit
 black
