@@ -1,6 +1,7 @@
 import os
 from datetime import date
-from typing import Dict, List, Union
+from pathlib import Path
+from typing import Dict, List
 
 import polars as pl
 
@@ -12,13 +13,13 @@ def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
     """Read in multiple historical market data CSV files from investing.com and bind them into a single DataFrame."""
 
     if not files:
-        raise ValueError("File list cannot be empty. Cannot construct LazyFrame.")
+        raise ValueError("File list cannot be empty. Cannot construct LazyFrame(s).")
 
     # Define static types for to prevent polars engine from incorrectly infering types by default
     numeric_columns = ["Price", "Open", "High", "Low", "Vol.", "Change %"]
     dtype_overrides = {col: pl.Utf8 for col in numeric_columns}
 
-    lfs = [pl.scan_csv(file, dtypes=dtype_overrides) for file in files]
+    lfs = [pl.scan_csv(file, schema_overrides=dtype_overrides) for file in files]
     concat_lf = pl.concat(lfs, how="vertical_relaxed")
     schema_names = concat_lf.collect_schema().names()  # Get schema names once
     for col_name in numeric_columns:
@@ -45,7 +46,7 @@ def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
     for col_name in numeric_columns:
         # Check if the column exists in the LazyFrame's schema.
         # If not, skip trying to transform it to avoid planning errors.
-        if col_name not in concat_lf.columns:
+        if col_name not in concat_lf.collect_schema().names():
             continue
 
         # Cast to String for robust cleaning. If already string, no change.
@@ -100,10 +101,15 @@ def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
     return concat_lf
 
 
-def load_commodity_futures_by_folder(
-    root_dir: Union[str, os.PathLike]
-) -> Dict[str, pl.LazyFrame]:
-    """Load all csv datasets from a root directory provided as thier own independedent data frames storeded in a dictionary with the folder name as the key"""
+def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
+    """Load all csv datasets from a root directory provided as their own independent data frames stored in a dictionary with the folder name as the key"""
+
+    root_dir_path = Path(root_dir)
+    if not root_dir_path.is_absolute():
+        root_dir = root_dir_path.resolve()
+
+    if not os.path.isdir(root_dir):
+        raise ValueError(f"Provided path '{root_dir}' is not a valid directory.")
 
     data_dict = {}
     for folder in os.listdir(root_dir):
@@ -135,7 +141,7 @@ def concat_all_data(
     for name, lf in data.items():
         if not isinstance(lf, pl.LazyFrame):
             raise TypeError(f"Dataset '{name}' must be a polars LazyFrame")
-        if "Date" not in lf.columns:
+        if "Date" not in lf.collect_schema().names():
             raise ValueError(f"Dataset '{name}' missing required 'Date' column")
         valid_lazyframes[name] = lf
 
@@ -191,6 +197,7 @@ def concat_all_data(
     result_lf = master_dates_df.lazy()
 
     # TODO investigate if there is a better way to handle this to prevent the need for as many for loops
+    # TODO fix order of filling nulls and creating was_nan column as it needs to come after the concat as null s are created in dates that do not exist for a dataset
     # Loop through datasets, process, and join lazily
     for name, lf_orig in valid_lazyframes.items():
         current_lf = lf_orig.clone()
@@ -200,7 +207,9 @@ def concat_all_data(
         ]  # Always include the Date column for joining
 
         # Iterate over columns intended for data (all columns except 'Date')
-        data_columns = [col for col in current_lf.columns if col != "Date"]
+        data_columns = [
+            col for col in current_lf.collect_schema().names() if col != "Date"
+        ]
 
         for col_name in data_columns:
             prefixed_col_name = f"{name}_{col_name}"
