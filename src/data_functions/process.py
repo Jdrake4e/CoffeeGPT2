@@ -2,7 +2,7 @@ import polars as pl
 
 
 def interpolate_data(
-    lf: pl.LazyFrame, interpolation_type: str = "None", track_nans="True"
+    lf: pl.LazyFrame, interpolation_type: str = "None", track_nans: bool = True
 ) -> pl.LazyFrame:
     match interpolation_type:
         case "ffill":
@@ -33,5 +33,5 @@ def fill_linear(lf: pl.LazyFrame) -> pl.LazyFrame:
     pass
 
 
-def add_features(lf) -> pl.LazyFrame:
+def add_features(lf: pl.LazyFrame) -> pl.LazyFrame:
     pass

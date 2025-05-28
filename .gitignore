@@ -15,3 +15,7 @@ design_doc.txt
 
 # Added by dvc
 /data
+
+# Jupyter Notebook checkpoints and backups
+.ipynb_checkpoints/
+*.ipynb~

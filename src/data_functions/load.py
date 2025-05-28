@@ -1,20 +1,23 @@
 import os
 from datetime import date
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Sequence
 
 import polars as pl
 
 # TODO add function to load preprocessed data
 
 
-def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
-    """Read in multiple historical market data CSV files from investing.com and bind them into a single DataFrame."""
+def _futures_readin_bind(files: Sequence[os.PathLike[Any]]) -> pl.LazyFrame:
+    """
+    Read in multiple historical market data CSV files from investing.com and
+    bind them into a single DataFrame."""
 
     if not files:
         raise ValueError("File list cannot be empty. Cannot construct LazyFrame(s).")
 
-    # Define static types for to prevent polars engine from incorrectly infering types by default
+    # Define static types for to prevent polars engine from
+    # incorrectly infering types by default
     numeric_columns = ["Price", "Open", "High", "Low", "Vol.", "Change %"]
     dtype_overrides = {col: pl.Utf8 for col in numeric_columns}
 
@@ -26,13 +29,9 @@ def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
             continue
 
     # Convert date from string to DT object and duplicate dates
-    # fmt: off
     concat_lf = concat_lf.with_columns(
-        pl.col("Date")
-        .str.to_datetime(format=r"%m/%d/%Y", strict=False)
-        .alias("Date")
-        )
-    # fmt: on
+        pl.col("Date").str.to_datetime(format=r"%m/%d/%Y", strict=False).alias("Date")
+    )
     concat_lf = concat_lf.unique(subset=["Date"], keep="first", maintain_order=True)
 
     # Remove commas from numeric columns and convert to float
@@ -62,14 +61,12 @@ def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
 
         # Build the multiplier expression based on the extracted suffix.
         multiplier_expr = pl.lit(1.0, dtype=pl.Float64)
-        # fmt: off
         for char, val in list(suffix_map.items()):
             multiplier_expr = (
                 pl.when(suffix_char_str == char)
                 .then(pl.lit(val, dtype=pl.Float64))
                 .otherwise(multiplier_expr)
             )
-        # fmt: on
 
         # Cast the value if a suffix was present.
         value_with_suffix = (
@@ -78,18 +75,18 @@ def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
         value_without_suffix = cleaned_expr.cast(pl.Float64, strict=False)
 
         # If the original value was null, keep it null.
-        # If a suffix and a numeric part were successfully extracted, use value_with_suffix.
-        # Otherwise (no suffix or invalid numeric part with suffix), try value_without_suffix.
-        # fmt: off
+        # If a suffix and a numeric part were successfully extracted
+        # use value_with_suffix.
+        # Otherwise (no suffix or invalid numeric part with suffix)
+        # use value_without_suffix.
         final_col_expr = (
             pl.when(original_value_expr.is_null())
-            .then(pl.lit(None, dtype=pl.Float64)) # Explicitly null of Float64 type
+            .then(pl.lit(None, dtype=pl.Float64))  # Explicitly null of Float64 type
             .when(suffix_char_str.is_not_null() & numeric_part_str.is_not_null())
             .then(value_with_suffix)
             .otherwise(value_without_suffix)
             .alias(col_name)  # Ensures the transformed column keeps its original name.
         )
-        # fmt: on
         transform_expressions.append(final_col_expr)
 
     # Apply expressions if generated
@@ -101,7 +98,11 @@ def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
 
 
 def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
-    """Load all csv datasets from a root directory provided as their own independent data frames stored in a dictionary with the folder name as the key"""
+    """
+    Load all csv datasets from a root directory provided as their
+    own independent dataframes stored in a dictionary with the folder name
+    as the key
+    """
 
     try:
         path_obj = Path(root_dir).resolve(strict=True)
@@ -115,6 +116,8 @@ def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
     if not path_obj.is_dir():
         raise ValueError(f"Provided path '{path_obj}' is not a directory.")
 
+    # TODO improve file tree traversal by building
+    #      a tree of all csvs in sub directories
     data_dict = {}
     for item_path in path_obj.iterdir():
         if item_path.is_dir():
@@ -135,7 +138,9 @@ def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
     return data_dict
 
 
-# TODO change to google doc string format, add custom fill method support via switch statement in a function call maintain track_nans for now; probs remove eventually
+# TODO change to google doc string format,
+#      add custom fill method support via switch statement in a function call
+#      maintain track_nans for now; probs remove eventually
 def concat_all_data(
     data: Dict[str, pl.LazyFrame], fill_method: str = "ffill", track_nans: bool = True
 ) -> pl.LazyFrame:
@@ -168,9 +173,11 @@ def concat_all_data(
         try:
             collected_dates_df = min_max_lf.collect()
         except Exception as e:
-            # This error moste likely will occur if a file has become inaccessible after scan_csv)
+            # This error most likely will occur
+            # if a file has become inaccessible after scan_csv
             print(
-                f"Warning: Could not collect min/max dates for '{name}': {e}. Skipping this item for date range calculation."
+                f"Warning: Could not collect min/max dates for '{name}': {e}. "
+                f"Skipping this item for date range calculation."
             )
             continue
         if not collected_dates_df.is_empty():
@@ -198,12 +205,17 @@ def concat_all_data(
             )
         }
     )
-    # Note to self in future polars date_range does not output a Datetime type but Date type instead
+    # Note to self in future polars date_range does not output
+    # a Datetime type but Date type instead
     master_dates_df = master_dates_df.with_columns(pl.col("Date").cast(pl.Datetime))
     result_lf = master_dates_df.lazy()
 
-    # TODO investigate if there is a better way to handle this to prevent the need for as many for loops
-    # TODO fix order of filling nulls and creating was_nan column as it needs to come after the concat as null s are created in dates that do not exist for a dataset
+    # TODO investigate if there is a better way to handle this to prevent the need for
+    #      as many for loops
+    # TODO fix order of filling nulls and creating was_nan column as it needs to come
+    #      after the concat as nulls are created in dates that do not exist
+    #      for a dataset
+
     # Loop through datasets, process, and join lazily
     for name, lf_orig in valid_lazyframes.items():
         current_lf = lf_orig.clone()

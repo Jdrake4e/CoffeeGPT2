@@ -1,9 +1,10 @@
 repos:
   # 1) Black for formatting
   - repo: https://github.com/psf/black
-    rev: 23.1.0
+    rev: 25.1.0
     hooks:
       - id: black
+        args: [--line-length=88]
         language_version: python3
 
   # 2) isort to sort imports, using Black’s style
@@ -11,10 +12,56 @@ repos:
     rev: 6.0.1
     hooks:
       - id: isort
-        args: ["--profile", "black"]
+        args: ["--profile", "black", "--filter-files"]
         language_version: python3
 
-  # 3) A handful of generic checks (whitespace, YAML syntax, conflict markers…)
+  # 3) nbqa to run tools on notebooks
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.9.1
+    hooks:
+      - id: nbqa-black
+        language_version: python3
+      - id: nbqa-isort
+        language_version: python3
+      - id: nbqa-flake8
+        language_version: python3
+      - id: nbqa-mypy
+        language_version: python3
+
+
+  # 4) Flake8 for linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.2.0
+    hooks:
+      - id: flake8
+        additional_dependencies: ["flake8-bugbear", "flake8-docstrings"]
+        language_version: python3
+
+  # 5) Mypy for type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        language_version: python3
+
+  # 6) Strip Jupyter notebook outputs
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+        files: \.ipynb$ # Apply to all Jupyter notebooks
+        args: [--drop-empty-cells, --strip-init-cells]
+
+  # 7) Bandit for security linting
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-r", "src/"]
+        language_version: python3
+        pass_filenames: false
+
+  # 8) A handful of generic checks (whitespace, YAML syntax, conflict markers, secrets, large files)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -22,3 +69,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+        exclude: \.ipynb$

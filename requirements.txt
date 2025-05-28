@@ -14,4 +14,14 @@ dvc
 pre-commit
 black
 isort
+flake8
+flake8-bugbear
+flake8-docstrings
+mypy
+nbqa
+nbstripout
+pytest
+bandit
+jupyter
+ipykernel
 --extra-index-url https://pypi.ngc.nvidia.com
