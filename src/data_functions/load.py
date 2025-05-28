@@ -5,11 +5,10 @@ from typing import Dict, List
 
 import polars as pl
 
-# TODO Validate all inputs
 # TODO add function to load preprocessed data
 
 
-def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
+def _futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
     """Read in multiple historical market data CSV files from investing.com and bind them into a single DataFrame."""
 
     if not files:
@@ -104,28 +103,35 @@ def futures_readin_bind(files: List[os.PathLike]) -> pl.LazyFrame:
 def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
     """Load all csv datasets from a root directory provided as their own independent data frames stored in a dictionary with the folder name as the key"""
 
-    root_dir_path = Path(root_dir)
-    if not root_dir_path.is_absolute():
-        root_dir = root_dir_path.resolve()
+    try:
+        path_obj = Path(root_dir).resolve(strict=True)
+    except FileNotFoundError:
+        raise ValueError(
+            f"Provided path '{root_dir}' does not exist or is not accessible."
+        )
+    except Exception as e:
+        raise ValueError(f"Error processing path '{root_dir}': {e}")
 
-    if not os.path.isdir(root_dir):
-        raise ValueError(f"Provided path '{root_dir}' is not a valid directory.")
+    if not path_obj.is_dir():
+        raise ValueError(f"Provided path '{path_obj}' is not a directory.")
 
     data_dict = {}
-    for folder in os.listdir(root_dir):
-        folder_path = os.path.join(root_dir, folder)
-        if os.path.isdir(folder_path):
-            csv_files = [
-                os.path.join(folder_path, f)
-                for f in os.listdir(folder_path)
-                if f.lower().endswith(".csv")
+    for item_path in path_obj.iterdir():
+        if item_path.is_dir():
+            csv_file_paths = [
+                file_path
+                for file_path in item_path.iterdir()
+                if file_path.is_file() and file_path.suffix.lower() == ".csv"
             ]
-            if csv_files:
+
+            if csv_file_paths:
+                folder_name = item_path.name
                 try:
-                    lf = futures_readin_bind(csv_files)
-                    data_dict[folder] = lf
+                    lf = _futures_readin_bind(csv_file_paths)
+                    data_dict[folder_name] = lf
                 except Exception as e:
-                    print(f"Failed to process {folder}: {e}")
+                    # TODO replace with a logger to remove the print
+                    print(f"Failed to process {folder_name}: {e}")
     return data_dict
 
 
