@@ -1,8 +1,8 @@
 # Ignore virtual environment directory
-/venv/
+/.venv
 
 # Ignore vscode setting directory
-/.vscode/
+/.vscode
 
 # Ignore data directory
 /data/
@@ -19,3 +19,9 @@ design_doc.txt
 # Jupyter Notebook checkpoints and backups
 .ipynb_checkpoints/
 *.ipynb~
+
+# Ignore mypy cache
+/.mypy_cache
+
+# Ignore uv lock file
+uv.lock

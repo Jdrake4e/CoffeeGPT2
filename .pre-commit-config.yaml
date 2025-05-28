@@ -1,65 +1,70 @@
 repos:
-  # 1) Black for formatting
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  # 0) Add uv sync hook to ensure consistent environments
+  - repo: local
     hooks:
-      - id: black
-        args: [--line-length=88]
-        language_version: python3
+      - id: uv-sync-check
+        name: uv check dependencies
+        entry: uv pip freeze
+        language: system
+        pass_filenames: false  # We don't want pre-commit to pass file names to `uv`
+        files: ^(pyproject\.toml|requirements\.lock)$  # Only run if these files are changed
 
-  # 2) isort to sort imports, using Black’s style
-  - repo: https://github.com/PyCQA/isort
-    rev: 6.0.1
+  # 1) Ruff for linting and formatting Python code
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.11
     hooks:
-      - id: isort
-        args: ["--profile", "black", "--filter-files"]
-        language_version: python3
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix, --config=pyproject.toml]
+      - id: ruff-format
+        args: [--config=pyproject.toml]
 
-  # 3) nbqa to run tools on notebooks
+  # 2) nbQA to run Ruff on notebooks (and Mypy)
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.9.1
     hooks:
-      - id: nbqa-black
-        language_version: python3
-      - id: nbqa-isort
-        language_version: python3
-      - id: nbqa-flake8
-        language_version: python3
+      - id: nbqa-ruff
+        args: [--fix, --exit-non-zero-on-fix, --config=pyproject.toml]
       - id: nbqa-mypy
-        language_version: python3
+        args: [--config-file=pyproject.toml]
 
-
-  # 4) Flake8 for linting
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.2.0
-    hooks:
-      - id: flake8
-        additional_dependencies: ["flake8-bugbear", "flake8-docstrings"]
-        language_version: python3
-
-  # 5) Mypy for type checking
+  # 3) Mypy for type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.15.0
     hooks:
       - id: mypy
         language_version: python3
 
-  # 6) Strip Jupyter notebook outputs
+  # 4) Strip Jupyter notebook outputs
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.1
     hooks:
       - id: nbstripout
-        files: \.ipynb$ # Apply to all Jupyter notebooks
+        files: \.ipynb$
         args: [--drop-empty-cells, --strip-init-cells]
 
-  # 7) Bandit for security linting
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
+  # 5) detect-secrets for finding secrets in ANY file
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: 'v1.5.0'
     hooks:
-      - id: bandit
-        args: ["-r", "src/"]
-        language_version: python3
-        pass_filenames: false
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        # exclude: (pattern_here) # e.g., '\.dvc/' or specific test files
+
+  # 6) Spell checking with codespell
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=ba,al,hist,te,teh,nd
+          - --skip=*.csv,*.json,*.parquet,*.dvc,uv.lock
+
+  # 7) TOML sorting for pyproject.toml
+  - repo: https://github.com/pappasam/toml-sort
+    rev: v0.24.2
+    hooks:
+      - id: toml-sort-fix
+        files: ^pyproject\.toml$
 
   # 8) A handful of generic checks (whitespace, YAML syntax, conflict markers, secrets, large files)
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -69,7 +74,5 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-merge-conflict
-      - id: detect-private-key
       - id: check-added-large-files
         args: ["--maxkb=1000"]
-        exclude: \.ipynb$
