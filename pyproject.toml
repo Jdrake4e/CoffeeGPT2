@@ -162,19 +162,24 @@ line-ending = "auto"
 
 [tool.ruff.lint]
 select = [
-  "E", # pycodestyle errors
-  "W", # pycodestyle warnings
-  "F", # pyflakes
-  "C", # flake8-comprehensions
-  "B", # flake8-bugbear
-  "I", # isort
-  "UP", # pyupgrade
-  "SIM" # flake8-simplify
-]
-ignore = [
-  "E203", # whitespace before ':'
-  "W503", # line break before binary operator
-  "B905" # zip without an explicit strict parameter
+  "D", # pydocstyle: enforce Google-style docstrings on modules/classes/functions
+  "E", # pycodestyle errors: PEP 8 errors (e.g. E302, E305)
+  "W", # pycodestyle warnings: PEP 8 warnings (e.g. W291 trailing whitespace)
+  "F", # pyflakes: undefined names, unused variables/imports
+  "I", # isort: import grouping and ordering
+  "S", # security: flake8-bandit rules (e.g. use of eval, shell injection)
+  "B", # bugbear: flake8-bugbear patterns (likely bugs/suboptimal code)
+  "A", # builtins: flake8-builtins checks (shadowing Python builtins)
+  "C", # comprehensions: flake8-comprehensions suggestions (simplify maps)
+  "UP", # pyupgrade: modernize syntax (f-strings, remove u prefix, etc.)
+  "RUF", # Ruff-specific rules (misc. stylistic and correctness checks)
+  "N", # pep8-naming: naming conventions (CamelCase, snake_case, UPPER_CASE)
+  "PT", # pytest-style: flake8-pytest-style for tests (use plain assert, etc.)
+  "Q", # quotes: flake8-quotes checks (consistent single/double quotes)
+  "SIM", # simplify: flake8-simplify suggestions (simpler idiomatic code)
+  "TID", # tidy-imports: flake8-tidy-imports (no star imports, grouped imports)
+  "ARG", # unused-arguments: flake8-unused-arguments (detect dead parameters)
+  "BLE" # blind-except: flake8-blind-except (avoid bare except clauses)
 ]
 
 [tool.ruff.lint.isort]
@@ -185,6 +190,9 @@ split-on-trailing-comma = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

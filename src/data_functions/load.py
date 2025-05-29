@@ -1,7 +1,15 @@
-import os
+"""Load and preprocess commodity futures data from investing.com CSV files.
+
+This module contains functions to read multiple CSV files, concatenate them
+into a single LazyFrame, and perform any basic cleaning needed before
+feature engineering or modeling.
+"""
+
+from collections.abc import Sequence
 from datetime import date
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 import polars as pl
 
@@ -9,17 +17,20 @@ import polars as pl
 
 
 def _futures_readin_bind(files: Sequence[os.PathLike[Any]]) -> pl.LazyFrame:
-    """
-    Read in multiple historical market data CSV files from investing.com and
-    bind them into a single DataFrame."""
+    """Read multiple historical market data CSVs and bind them into one DataFrame.
 
+    Given a sequence of file-paths, this function:
+        1. Loads each CSV as a Polars LazyFrame
+        2. Concatenates them
+        3. Returns the resulting LazyFrame for downstream processing
+    """
     if not files:
         raise ValueError("File list cannot be empty. Cannot construct LazyFrame(s).")
 
     # Define static types for to prevent polars engine from
-    # incorrectly infering types by default
+    # incorrectly inferring types by default
     numeric_columns = ["Price", "Open", "High", "Low", "Vol.", "Change %"]
-    dtype_overrides = {col: pl.Utf8 for col in numeric_columns}
+    dtype_overrides = dict.fromkeys(numeric_columns, pl.Utf8)
 
     lfs = [pl.scan_csv(file, schema_overrides=dtype_overrides) for file in files]
     concat_lf = pl.concat(lfs, how="vertical_relaxed")
@@ -97,21 +108,21 @@ def _futures_readin_bind(files: Sequence[os.PathLike[Any]]) -> pl.LazyFrame:
     return concat_lf
 
 
-def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
-    """
-    Load all csv datasets from a root directory provided as their
-    own independent dataframes stored in a dictionary with the folder name
-    as the key
-    """
+def load_commodity_futures_by_folder(root_dir: str) -> dict[str, pl.LazyFrame]:
+    """Load each subfolder of CSVs as its own LazyFrame.
 
+    Walks `root_dir`, finds all CSVs in each immediate subdirectory, and
+    returns a dict mapping folder-name to a combined LazyFrame
+    of all csv files in a directory.
+    """
     try:
         path_obj = Path(root_dir).resolve(strict=True)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise ValueError(
             f"Provided path '{root_dir}' does not exist or is not accessible."
-        )
+        ) from e
     except Exception as e:
-        raise ValueError(f"Error processing path '{root_dir}': {e}")
+        raise ValueError(f"Error processing path '{root_dir}': {e}") from e
 
     if not path_obj.is_dir():
         raise ValueError(f"Provided path '{path_obj}' is not a directory.")
@@ -129,22 +140,13 @@ def load_commodity_futures_by_folder(root_dir: str) -> Dict[str, pl.LazyFrame]:
 
             if csv_file_paths:
                 folder_name = item_path.name
-                try:
-                    lf = _futures_readin_bind(csv_file_paths)
-                    data_dict[folder_name] = lf
-                except Exception as e:
-                    # TODO replace with a logger to remove the print
-                    print(f"Failed to process {folder_name}: {e}")
+                lf = _futures_readin_bind(csv_file_paths)
+                data_dict[folder_name] = lf
     return data_dict
 
 
-# TODO change to google doc string format,
-#      add custom fill method support via switch statement in a function call
-#      maintain track_nans for now; probs remove eventually
-def concat_all_data(
-    data: Dict[str, pl.LazyFrame], fill_method: str = "ffill", track_nans: bool = True
-) -> pl.LazyFrame:
-    # Validate inputs
+def _validate_lazyframes(data: dict[str, pl.LazyFrame]) -> dict[str, pl.LazyFrame]:
+    """Validate that all LazyFrames in the input dict are valid."""
     if not data:
         raise ValueError("Input data dictionary cannot be empty")
 
@@ -158,28 +160,30 @@ def concat_all_data(
 
     if not valid_lazyframes:  # If all items were filtered out due to some validation
         raise ValueError("No valid LazyFrames found in the input data dictionary.")
+    return valid_lazyframes
 
-    # Determine Overall Date Range
-    all_min_dates: List[date] = []
-    all_max_dates: List[date] = []
 
-    for name, lf_item in valid_lazyframes.items():
+def _determine_master_date_range(
+    valid_lazyframes: dict[str, pl.LazyFrame],
+) -> pl.LazyFrame:
+    """Parse the overall date range from input LazyFrame(s).
+
+    Create a master LazyFrame.
+    """
+    all_min_dates: list[date] = []
+    all_max_dates: list[date] = []
+
+    for _, lf_item in valid_lazyframes.items():
         min_max_lf = lf_item.select(
             [
                 pl.min("Date").alias("min_date_val"),
                 pl.max("Date").alias("max_date_val"),
             ]
         )
-        try:
-            collected_dates_df = min_max_lf.collect()
-        except Exception as e:
-            # This error most likely will occur
-            # if a file has become inaccessible after scan_csv
-            print(
-                f"Warning: Could not collect min/max dates for '{name}': {e}. "
-                f"Skipping this item for date range calculation."
-            )
-            continue
+        # TODO when we add logging, wrap this block and catch specific errors
+        #      I will also have continue in the block
+        collected_dates_df = min_max_lf.collect()
+
         if not collected_dates_df.is_empty():
             min_val = collected_dates_df.item(0, "min_date_val")
             max_val = collected_dates_df.item(0, "max_date_val")
@@ -205,17 +209,20 @@ def concat_all_data(
             )
         }
     )
+
     # Note to self in future polars date_range does not output
     # a Datetime type but Date type instead
     master_dates_df = master_dates_df.with_columns(pl.col("Date").cast(pl.Datetime))
-    result_lf = master_dates_df.lazy()
+    master_dates_lf = master_dates_df.lazy()
 
-    # TODO investigate if there is a better way to handle this to prevent the need for
-    #      as many for loops
-    # TODO fix order of filling nulls and creating was_nan column as it needs to come
-    #      after the concat as nulls are created in dates that do not exist
-    #      for a dataset
+    return master_dates_lf
 
+
+def _join_lazyframes(
+    valid_lazyframes: dict[str, pl.LazyFrame],
+    result_lf: pl.LazyFrame,
+    track_nans: bool = True,
+) -> pl.LazyFrame:
     # Loop through datasets, process, and join lazily
     for name, lf_orig in valid_lazyframes.items():
         current_lf = lf_orig.clone()
@@ -242,15 +249,7 @@ def concat_all_data(
                     .alias(f"{prefixed_col_name}_was_nan")
                 )
 
-            # TODO seperate interpolation logic to process.py
-            if fill_method == "ffill":
-                filled_expr = data_col_expr.forward_fill()
-            elif fill_method == "zero":
-                filled_expr = data_col_expr.fill_null(0)
-            else:
-                filled_expr = data_col_expr  # No filling
-
-            expressions_to_select.append(filled_expr.alias(prefixed_col_name))
+            expressions_to_select.append(data_col_expr.alias(prefixed_col_name))
 
         # Select and alias columns from the current commodity's LazyFrame
         # If current_lf might be empty after unique(), select could fail if no columns.
@@ -260,6 +259,37 @@ def concat_all_data(
 
         lf_to_join = current_lf.select(expressions_to_select)
         result_lf = result_lf.join(lf_to_join, on="Date", how="left")
+    return result_lf
+
+
+# TODO change to google doc string format,
+#      fill method will be handled outside later and not here
+#      via switch statement in a function call in process.py
+#      maintain track_nans for now; probs remove eventually
+def concat_all_data(
+    data: dict[str, pl.LazyFrame], track_nans: bool = True
+) -> pl.LazyFrame:
+    """Concatenate multiple LazyFrames into one over a master date range.
+
+    Given a dict mapping names to Polars LazyFrames, this function:
+        1. Unions all frames on their date column
+        2. Resamples the result to the overall min→max date span
+        3. Optionally preserves NaNs if `track_nans` is True
+
+    Args:
+        data: Mapping of asset names to their respective LazyFrame.
+        track_nans: If True, leaves NaNs introduced by resampling;
+                    otherwise all gaps are filled.
+
+    Returns:
+        A single `pl.LazyFrame` covering the combined date index.
+
+    """
+    valid_lazyframes: dict[str, pl.LazyFrame] = _validate_lazyframes(data)
+    master_lf: pl.LazyFrame = _determine_master_date_range(valid_lazyframes)
+    result_lf: pl.LazyFrame = _join_lazyframes(
+        valid_lazyframes, master_lf, track_nans=track_nans
+    )
 
     return result_lf
 
@@ -269,9 +299,7 @@ if __name__ == "__main__":
     commodity_futures = load_commodity_futures_by_folder(
         r"data\raw\commodity_data\daily"
     )
-    concat_data_df = concat_all_data(
-        commodity_futures, fill_method="ffill", track_nans=True
-    ).collect()
+    concat_data_df = concat_all_data(commodity_futures, track_nans=True).collect()
 
     print("\nCollected final DataFrame (returned by concat_all_data_lazy):")
     print(f"Shape of final DataFrame: {concat_data_df.shape}")
