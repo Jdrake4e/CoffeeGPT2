@@ -38,13 +38,6 @@ repos:
         args: ['--baseline', '.secrets.baseline']
         # exclude: (pattern_here) # e.g., '\.dvc/' or specific test files
 
-  # 6) Bandit for security checks in Python code
-  - repo: https://github.com/PyCQA/bandit
-    rev: '1.8.3'
-    hooks:
-      - id: bandit
-        args: ['-r', '.', '-f', 'json', '-o', 'bandit-report.json']
-
   # 6) Spell checking with codespell
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1

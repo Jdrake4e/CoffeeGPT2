@@ -25,3 +25,6 @@ design_doc.txt
 
 # Ignore uv lock file
 uv.lock
+
+# Ingore ruff cache
+/.ruff_cache
