@@ -212,10 +212,7 @@ def _determine_master_date_range(
 
     # Note to self in future polars date_range does not output
     # a Datetime type but Date type instead
-    master_dates_df = master_dates_df.with_columns(pl.col("Date").cast(pl.Datetime))
-    master_dates_lf = master_dates_df.lazy()
-
-    return master_dates_lf
+    return master_dates_df.with_columns(pl.col("Date").cast(pl.Datetime)).lazy()
 
 
 def _join_lazyframes(
@@ -236,6 +233,7 @@ def _join_lazyframes(
             col for col in current_lf.collect_schema().names() if col != "Date"
         ]
 
+        # TODO Move nan tracking to track_nans in process.py
         for col_name in data_columns:
             prefixed_col_name = f"{name}_{col_name}"
             data_col_expr = pl.col(col_name)
