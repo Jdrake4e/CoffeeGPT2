@@ -35,7 +35,6 @@ def interpolate_data(
             - "b_spline": B-spline interpolation
             - "Chebyshev": Chebyshev interpolation
             - "radial_basis_function": Radial basis function interpolation
-        track_nans (bool): Whether to track NaNs in the data.
 
     Returns: lazyframe with interpolated data.
 
