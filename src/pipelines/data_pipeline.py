@@ -17,11 +17,11 @@ def run_data_pipeline(
     """Run the data pipeline for processing commodity futures data."""
     lf_dict = load.load_commodity_futures_by_folder(path)
     full_data = load.concat_all_data(lf_dict)
-    nan_data = process.track_nans(full_data) if track_nans else full_data
+    null_data = process.track_nulls(full_data) if track_nans else full_data
     interpolated_data = (
-        process.interpolate_data(nan_data, interpolation_type)
+        process.interpolate_data(null_data, interpolation_type)
         if interpolation_type != "None"
-        else nan_data
+        else null_data
     )
     features_added_data = process.add_features(interpolated_data)  # noqa: F841
     pass

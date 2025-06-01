@@ -218,7 +218,6 @@ def _determine_master_date_range(
 def _join_lazyframes(
     valid_lazyframes: dict[str, pl.LazyFrame],
     result_lf: pl.LazyFrame,
-    track_nans: bool = True,
 ) -> pl.LazyFrame:
     # Loop through datasets, process, and join lazily
     for name, lf_orig in valid_lazyframes.items():
@@ -237,16 +236,6 @@ def _join_lazyframes(
         for col_name in data_columns:
             prefixed_col_name = f"{name}_{col_name}"
             data_col_expr = pl.col(col_name)
-
-            if track_nans:
-                # Add a column indicating if the original value was NaN
-                # This happens *before* any filling.
-                expressions_to_select.append(
-                    data_col_expr.is_null()
-                    .cast(pl.Int8)  # Cast boolean to int (0 or 1)
-                    .alias(f"{prefixed_col_name}_was_nan")
-                )
-
             expressions_to_select.append(data_col_expr.alias(prefixed_col_name))
 
         # Select and alias columns from the current commodity's LazyFrame
@@ -264,20 +253,15 @@ def _join_lazyframes(
 #      fill method will be handled outside later and not here
 #      via switch statement in a function call in process.py
 #      maintain track_nans for now; probs remove eventually
-def concat_all_data(
-    data: dict[str, pl.LazyFrame], track_nans: bool = True
-) -> pl.LazyFrame:
+def concat_all_data(data: dict[str, pl.LazyFrame]) -> pl.LazyFrame:
     """Concatenate multiple LazyFrames into one over a master date range.
 
     Given a dict mapping names to Polars LazyFrames, this function:
         1. Unions all frames on their date column
-        2. Resamples the result to the overall min→max date span
-        3. Optionally preserves NaNs if `track_nans` is True
+        2. Resamples the result to the overall min -> max date span
 
     Args:
         data: Mapping of asset names to their respective LazyFrame.
-        track_nans: If True, leaves NaNs introduced by resampling;
-                    otherwise all gaps are filled.
 
     Returns:
         A single `pl.LazyFrame` covering the combined date index.
@@ -285,9 +269,7 @@ def concat_all_data(
     """
     valid_lazyframes: dict[str, pl.LazyFrame] = _validate_lazyframes(data)
     master_lf: pl.LazyFrame = _determine_master_date_range(valid_lazyframes)
-    result_lf: pl.LazyFrame = _join_lazyframes(
-        valid_lazyframes, master_lf, track_nans=track_nans
-    )
+    result_lf: pl.LazyFrame = _join_lazyframes(valid_lazyframes, master_lf)
 
     return result_lf
 
@@ -297,7 +279,7 @@ if __name__ == "__main__":
     commodity_futures = load_commodity_futures_by_folder(
         r"data\raw\commodity_data\daily"
     )
-    concat_data_df = concat_all_data(commodity_futures, track_nans=True).collect()
+    concat_data_df = concat_all_data(commodity_futures).collect()
 
     print("\nCollected final DataFrame (returned by concat_all_data_lazy):")
     print(f"Shape of final DataFrame: {concat_data_df.shape}")

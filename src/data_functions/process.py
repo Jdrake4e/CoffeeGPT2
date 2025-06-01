@@ -7,9 +7,15 @@ and adding features(tbd which ones).
 import polars as pl
 
 
-def track_nans(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """Track nans per feature by marking with a 1 if nan, 0 if not nan."""
-    pass
+def track_nulls(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Track null per feature by marking with a 1 if null, 0 if not null."""
+    expressions = [
+        pl.col(col).is_null().cast(pl.Int8).alias(f"{col}_was_null")
+        for col in lf.collect_schema().names()
+        if col != "Date"
+    ]
+
+    return lf.with_columns(expressions)
 
 
 def interpolate_data(
