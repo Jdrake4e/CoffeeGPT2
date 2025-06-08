@@ -18,6 +18,7 @@ def run_data_pipeline(
     ewma_configs: list[dict] | None = None,
 ) -> None:
     """Run the data pipeline for processing commodity futures data."""
+    # TODO remove defaults after testing
     if ma_configs is None:
         ma_configs = [
             (20, 1),
