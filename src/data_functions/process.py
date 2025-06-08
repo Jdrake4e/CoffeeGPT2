@@ -7,6 +7,138 @@ and adding features(tbd which ones).
 import polars as pl
 
 
+def _get_base_columns(lf: pl.LazyFrame) -> list[str]:
+    return [
+        col
+        for col in lf.collect_schema().names()
+        if not any(
+            [
+                col.endswith("_was_null"),
+                col == "Date",
+                "_ma_" in col,
+                "_wma_" in col,
+                "_ewma_" in col,
+            ]
+        )
+    ]
+
+
+# TODO improve naming of columns
+def moving_average(lf: pl.LazyFrame, ma_configs: list[tuple[int, int]]) -> pl.LazyFrame:
+    """Calculate simple moving averages for specified configurations.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to calculate moving averages on.
+        ma_configs (list[tuple[int, int]]): List of (window_size, min_samples) tuples.
+
+    Returns:
+        pl.LazyFrame: LazyFrame with moving averages added as new columns.
+
+    Raises:
+        ValueError: If any configuration is invalid.
+    """
+    # Validation
+    for window_size, min_samples in ma_configs:
+        if window_size <= 0:
+            raise ValueError(f"window_size must be > 0, got {window_size}")
+        if min_samples <= 0:
+            raise ValueError(f"min_samples must be > 0, got {min_samples}")
+        if min_samples > window_size:
+            raise ValueError(
+                f"min_samples ({min_samples}) cannot exceed window_size ({window_size})"
+            )
+
+    base_columns = _get_base_columns(lf)
+
+    all_expressions = []
+    for window_size, min_samples in ma_configs:
+        expressions = [
+            pl.col(col)
+            .rolling_mean(window_size, min_samples=min_samples)
+            .alias(f"{col}_ma_{window_size}d")
+            for col in base_columns
+        ]
+        all_expressions.extend(expressions)
+
+    return lf.with_columns(all_expressions)
+
+
+def _validate_ewma_configs(ewma_configs: list[dict]) -> None:
+    """Validate the EWMA configurations."""
+    for config in ewma_configs:
+        if not isinstance(config, dict):
+            raise ValueError("Each EWMA config must be a dictionary")
+
+        valid_params = {"alpha", "span", "half_life"}
+        provided_params = set(config.keys()) & valid_params
+
+        if len(provided_params) != 1:
+            raise ValueError(
+                f"Each config must have exactly one of {valid_params}"
+                f", got {list(config.keys())}"
+            )
+
+        param_name = next(iter(provided_params))
+        param_value = config[param_name]
+
+        if not isinstance(param_value, int | float) or isinstance(param_value, bool):
+            raise ValueError(f"{param_name} must be numeric, got {type(param_value)}")
+
+        if param_value != param_value or abs(param_value) == float(
+            "inf"
+        ):  # Check for NaN and inf
+            raise ValueError(f"{param_name} must be finite")
+
+        if param_name == "alpha" and not (0 < param_value <= 1):
+            raise ValueError(f"alpha must be in (0, 1], got {param_value}")
+        elif param_name == "span" and param_value < 1:
+            raise ValueError(f"span must be >= 1, got {param_value}")
+        elif param_name == "half_life" and param_value <= 0:
+            raise ValueError(f"half_life must be > 0, got {param_value}")
+
+
+# TODO improve naming of columns
+def exponential_weighted_moving_average(
+    lf: pl.LazyFrame, ewma_configs: list[dict]
+) -> pl.LazyFrame:
+    """Calculate exponential weighted moving averages for specified configurations.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to calculate EWMA on.
+        ewma_configs (list[dict]): List of dicts with one of: alpha, span, or half_life.
+
+    Returns:
+        pl.LazyFrame: LazyFrame with EWMA added as new columns.
+
+    Raises:
+        ValueError: If any configuration is invalid.
+    """
+    _validate_ewma_configs(ewma_configs)
+
+    base_columns = _get_base_columns(lf)
+
+    all_expressions = []
+    for config in ewma_configs:
+        param_name = next(iter(set(config.keys()) & {"alpha", "span", "half_life"}))
+        param_value = config[param_name]
+
+        # Create alias suffix based on parameter type
+        if param_name == "alpha":
+            suffix = f"ewma_alpha_{param_value}"
+        elif param_name == "span":
+            suffix = f"ewma_span_{param_value}"
+        else:  # half_life
+            suffix = f"ewma_hl_{param_value}"
+
+        expressions = [
+            pl.col(col).ewm_mean(**config).alias(f"{col}_{suffix}")
+            for col in base_columns
+        ]
+        all_expressions.extend(expressions)
+
+    return lf.with_columns(all_expressions)
+
+
 def track_nulls(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Track null per feature by marking with a 1 if null, 0 if not null."""
     expressions = [
@@ -15,7 +147,12 @@ def track_nulls(lf: pl.LazyFrame) -> pl.LazyFrame:
         if col != "Date"
     ]
 
-    return lf.with_columns(expressions)
+    return lf.with_columns(expressions).lazy()
+
+
+def drop_nulls(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Drop rows with null values."""
+    return lf.drop_nulls()
 
 
 def interpolate_data(
@@ -70,11 +207,15 @@ def _fill_backward(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 def _fill_linear(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using linear interpolation."""
-    pass
+    return lf.interpolate()
 
 
 def _fill_cubic_spline(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using cubic spline interpolation."""
+    # TODO Implement cubic spline interpolation
+    #      Looking at polars docs, no built in way
+    #      so will have to implement manually or
+    #      find a library for the following functions below
     pass
 
 
@@ -96,3 +237,6 @@ def _fill_radial_basis_function(lf: pl.LazyFrame) -> pl.LazyFrame:
 def add_features(lf: pl.LazyFrame) -> pl.LazyFrame:
     """To be decided what features to add."""
     pass
+
+
+# look at Regime-Aware Missing Data Imputation

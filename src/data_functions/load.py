@@ -232,7 +232,6 @@ def _join_lazyframes(
             col for col in current_lf.collect_schema().names() if col != "Date"
         ]
 
-        # TODO Move nan tracking to track_nans in process.py
         for col_name in data_columns:
             prefixed_col_name = f"{name}_{col_name}"
             data_col_expr = pl.col(col_name)
