@@ -1,9 +1,11 @@
 """This module provide a pipeline for all data preprocccessing steps."""
 
-import financial_transformer.data_functions.load as load
-import financial_transformer.data_functions.process as process
+# from ..data_function as dataloaders
+from typing import Literal
 
-# import src.data_function.dataloaders as dataloaders
+import polars as pl
+
+from ..data_functions import load, process  # noqa: TID252
 
 
 # TODO figureout what type this will out put at the end, probs a torch dataloader
@@ -16,7 +18,8 @@ def run_data_pipeline(
     drop_nulls: bool = False,
     ma_configs: list[tuple[int, int]] | None = None,
     ewma_configs: list[dict] | None = None,
-) -> None:
+    returns_features: list[Literal["percent", "log"]] | None = None,
+) -> pl.LazyFrame:
     """Run the data pipeline for processing commodity futures data."""
     # TODO remove defaults after testing
     if ma_configs is None:
@@ -27,6 +30,8 @@ def run_data_pipeline(
             (365, 1),
             (2 * 365, 1),
         ]
+    if returns_features is None:
+        returns_features = ["percent", "log"]
 
     if ewma_configs is None:
         ewma_configs = [{"alpha": 0.1}, {"span": 20}, {"half_life": 10}]
@@ -48,6 +53,7 @@ def run_data_pipeline(
         # TODO switch to polars.Expr.ewm_mean_by and reverse the order of creating
         #      these to take advantage of the function I found
         ma_data = process.exponential_weighted_moving_average(ma_data, ewma_configs)
+    returns_data = process.add_returns(ma_data, returns_features)
 
-    features_added_data = process.add_features(ma_data)  # noqa: F841
-    pass
+    final_data = returns_data
+    return final_data

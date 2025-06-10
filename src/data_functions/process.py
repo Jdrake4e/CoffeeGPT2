@@ -4,6 +4,8 @@ It includes functions for interpolating missing data, tracking NaNs,
 and adding features(tbd which ones).
 """
 
+from typing import Any, Literal
+
 import polars as pl
 
 
@@ -16,14 +18,97 @@ def _get_base_columns(lf: pl.LazyFrame) -> list[str]:
                 col.endswith("_was_null"),
                 col == "Date",
                 "_ma_" in col,
-                "_wma_" in col,
                 "_ewma_" in col,
+                "_return" in col,
+                "_log_return" in col,
             ]
         )
     ]
 
 
-# TODO improve naming of columns
+def _generate_column_alias(
+    base_col: str, operation_name: str, params: dict[str, Any]
+) -> str:
+    """Generates a consistent column alias."""
+    alias_parts = [base_col, operation_name]
+    for param_name, param_value in params.items():
+        # Sanitize param_name for alias (e.g., 'window_size' -> 'w')
+        if param_name == "window_size":
+            alias_parts.append(f"w{param_value}")
+        elif param_name == "min_samples":
+            if param_value != params.get("window_size", 1):  # Only add if not default
+                alias_parts.append(f"ms{param_value}")
+        elif param_name == "alpha":
+            alias_parts.append(f"a{param_value}")
+        elif param_name == "span":
+            alias_parts.append(f"s{param_value}")
+        elif param_name == "half_life":
+            alias_parts.append(f"hl{param_value}")
+    return "_".join(alias_parts)
+
+
+def _add_percent_returns(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Adds percent returns to the LazyFrame."""
+    base_columns = _get_base_columns(lf)
+
+    expressions = [
+        (pl.col(col) / pl.col(col).shift(1) - 1).alias(f"{col}_return")
+        for col in base_columns
+    ]
+
+    return lf.with_columns(expressions)
+
+
+def _add_log_returns(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Adds log returns to the LazyFrame."""
+    base_columns = _get_base_columns(lf)
+
+    expressions = [
+        (pl.col(col).log() - pl.col(col).shift(1).log()).alias(f"{col}_log_return")
+        for col in base_columns
+    ]
+
+    return lf.with_columns(expressions)
+
+
+def add_returns(
+    lf: pl.LazyFrame, return_types: list[Literal["percent", "log"]]
+) -> pl.LazyFrame:
+    """Adds both percent and log returns to the LazyFrame.
+
+    This function checks the return_types list and adds the specified returns.
+    Supported return types are:
+        - "percent": Adds percent returns.
+        - "log": Adds log returns.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to add returns to.
+        return_types (list[str]): List of return types to add. Options are:
+            - "percent": Adds percent returns.
+            - "log": Adds log returns.
+
+    Returns:
+        pl.LazyFrame: LazyFrame with returns added as new columns.
+
+    Raises:
+        ValueError: If an invalid return type is specified.
+    """
+    if not return_types:
+        raise ValueError("return_types must not be empty")
+    if not all(rt in {"percent", "log"} for rt in return_types):
+        raise ValueError(
+            f"return_types must contain only 'percent' or 'log', got {return_types}"
+        )
+
+    if "percent" in return_types:
+        lf = _add_percent_returns(lf)
+    if "log" in return_types:
+        lf = _add_log_returns(lf)
+    return lf
+
+
+# TODO improve naming of columns also make a function like the one
+#      above for modularity and input of a list of features
 def moving_average(lf: pl.LazyFrame, ma_configs: list[tuple[int, int]]) -> pl.LazyFrame:
     """Calculate simple moving averages for specified configurations.
 
@@ -139,6 +224,91 @@ def exponential_weighted_moving_average(
     return lf.with_columns(all_expressions)
 
 
+def _add_rolling_std(
+    lf: pl.LazyFrame, window_size: int, min_samples: int = 1
+) -> pl.LazyFrame:
+    """Calculate rolling standard deviation for specified window size and min samples.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to calculate rolling std on.
+        window_size (int): The size of the rolling window.
+        min_samples (int): Minimum number of non-null observations required.
+
+    Returns:
+        pl.LazyFrame: LazyFrame with rolling standard deviation added as new columns.
+    """
+    base_columns = _get_base_columns(lf)
+
+    expressions = [
+        pl.col(col)
+        .rolling_std(window_size, min_samples=min_samples)
+        .alias(f"{col}_rolling_std_{window_size}d")
+        for col in base_columns
+    ]
+
+    return lf.with_columns(expressions)
+
+
+def _add_rolling_var(
+    lf: pl.LazyFrame, window_size: int, min_samples: int = 1
+) -> pl.LazyFrame:
+    """Calculate rolling variance for specified window size and min samples.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to calculate rolling variance on.
+        window_size (int): The size of the rolling window.
+        min_samples (int): Minimum number of non-null observations required.
+
+    Returns:
+        pl.LazyFrame: LazyFrame with rolling variance added as new columns.
+    """
+    base_columns = _get_base_columns(lf)
+
+    expressions = [
+        pl.col(col)
+        .rolling_var(window_size, min_samples=min_samples)
+        .alias(f"{col}_rolling_var_{window_size}d")
+        for col in base_columns
+    ]
+
+    return lf.with_columns(expressions)
+
+
+def add_rolling_stats(
+    lf: pl.LazyFrame,
+    window_size: int,
+    min_samples: int = 1,
+    stats: list[str] | None = None,
+) -> pl.LazyFrame:
+    """Add rolling statistics to the LazyFrame.
+
+    Args:
+        lf (pl.LazyFrame): The LazyFrame to add rolling statistics to.
+        window_size (int): The size of the rolling window.
+        min_samples (int): Minimum number of non-null observations required.
+        stats (list[str]): List of statistics to calculate. Options are:
+            - "std": Rolling standard deviation
+            - "var": Rolling variance
+
+    Returns:
+        pl.LazyFrame: LazyFrame with rolling statistics added as new columns.
+    """
+    if stats is None:
+        stats = ["std", "var"]
+
+    if not stats:
+        raise ValueError("stats must not be empty")
+    if not all(stat in {"std", "var"} for stat in stats):
+        raise ValueError(f"stats must contain only 'std' or 'var', got {stats}")
+
+    if "std" in stats:
+        lf = _add_rolling_std(lf, window_size, min_samples)
+    if "var" in stats:
+        lf = _add_rolling_var(lf, window_size, min_samples)
+
+    return lf
+
+
 def track_nulls(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Track null per feature by marking with a 1 if null, 0 if not null."""
     expressions = [
@@ -161,6 +331,8 @@ def interpolate_data(
     """Interpolate missing data in a LazyFrame.
 
     This function supports various interpolation methods including:
+    TODO: Implement cubic spline, B-spline, Chebyshev,
+        and radial basis function interpolation.
 
     Args:
         lf (pl.LazyFrame): The LazyFrame to interpolate.
