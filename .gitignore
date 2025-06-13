@@ -1,30 +1,54 @@
-# Ignore virtual environment directory
+# Virtual Environment
 /.venv
 
-# Ignore vscode setting directory
+# IDE and Editor Settings
 /.vscode
+.idea/
 
-# Ignore data directory
+# Environment Files
+.env
+.env.*
+
+# Data Files and Directories
 /data/
+*.csv
+*.parquet
+*.h5
+/datasets/
 
-# Ignore design doc
-design_doc.txt
-
-# Ignore logs directory
+# Logs and Temporary Files
 /logs
+*.log
+*.tmp
+*.bak
 
-# Added by dvc
-/data
-
-# Jupyter Notebook checkpoints and backups
+# Jupyter Notebook Files
 .ipynb_checkpoints/
 *.ipynb~
+*.nbconvert.ipynb
 
-# Ignore mypy cache
+# Compiled Python Files
+*.pyc
+*.pyo
+__pycache__/
+
+# Build and Distribution Files
+/build/
+/dist/
+*.egg-info/
+
+# Testing Artifacts
+.pytest_cache/
+coverage.xml
+.coverage
+
+# Cache Files
 /.mypy_cache
+/.ruff_cache
+.dvc/
 
-# Ignore uv lock file
+# Lock Files
 uv.lock
 
-# Ingore ruff cache
-/.ruff_cache
+# Design Documents
+design_doc.txt
