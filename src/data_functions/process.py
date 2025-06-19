@@ -21,6 +21,8 @@ def _get_base_columns(lf: pl.LazyFrame) -> list[str]:
                 "_ewma_" in col,
                 "_return" in col,
                 "_log_return" in col,
+                "_rolling_std_" in col,
+                "_rolling_var_" in col,
             ]
         )
     ]
@@ -252,7 +254,7 @@ def _add_rolling_std(
 def _add_rolling_var(
     lf: pl.LazyFrame, window_size: int, min_samples: int = 1
 ) -> pl.LazyFrame:
-    """Calculate rolling variance for specified window size and min samples.
+    """Calculate rolling variance for specified window size and min_samples.
 
     Args:
         lf (pl.LazyFrame): The LazyFrame to calculate rolling variance on.
@@ -276,35 +278,42 @@ def _add_rolling_var(
 
 def add_rolling_stats(
     lf: pl.LazyFrame,
-    window_size: int,
-    min_samples: int = 1,
-    stats: list[str] | None = None,
+    rolling_configs: list[dict[str, int | list[Literal["std", "var"]]]],
 ) -> pl.LazyFrame:
-    """Add rolling statistics to the LazyFrame.
+    """Add rolling statistics to the LazyFrame based on configurations.
+
+    This function supports adding rolling standard deviation and variance
+    based on the provided configurations. Each configuration should specify
+    the window size and the statistics to compute.
 
     Args:
         lf (pl.LazyFrame): The LazyFrame to add rolling statistics to.
-        window_size (int): The size of the rolling window.
-        min_samples (int): Minimum number of non-null observations required.
-        stats (list[str]): List of statistics to calculate. Options are:
-            - "std": Rolling standard deviation
-            - "var": Rolling variance
+        rolling_configs (list[dict[str, Any]]): List of configurations.
+            Each config should contain:
+                - "window_size": int, the size of the rolling window.
+                - "stats": list of str, statistics to compute, e.g., ["std", "var"].
 
     Returns:
         pl.LazyFrame: LazyFrame with rolling statistics added as new columns.
+
+    Raises:
+        ValueError: If any configuration is invalid.
     """
-    if stats is None:
-        stats = ["std", "var"]
+    for config in rolling_configs:
+        window_size = config.get("window_size")
+        stats = config.get("stats", ["std", "var"])
 
-    if not stats:
-        raise ValueError("stats must not be empty")
-    if not all(stat in {"std", "var"} for stat in stats):
-        raise ValueError(f"stats must contain only 'std' or 'var', got {stats}")
+        if not isinstance(window_size, int) or window_size <= 0:
+            raise ValueError("window_size must be a positive integer")
+        if stats is None or not isinstance(stats, list):
+            raise ValueError("stats must be a list of 'std' and/or 'var'")
+        if not all(stat in {"std", "var"} for stat in stats):
+            raise ValueError("stats must contain only 'std' or 'var'")
 
-    if "std" in stats:
-        lf = _add_rolling_std(lf, window_size, min_samples)
-    if "var" in stats:
-        lf = _add_rolling_var(lf, window_size, min_samples)
+        if "std" in stats:
+            lf = _add_rolling_std(lf, window_size)
+        if "var" in stats:
+            lf = _add_rolling_var(lf, window_size)
 
     return lf
 
@@ -385,7 +394,7 @@ def _fill_linear(lf: pl.LazyFrame) -> pl.LazyFrame:
 def _fill_cubic_spline(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using cubic spline interpolation."""
     # TODO Implement cubic spline interpolation
-    #      Looking at polars docs, no built in way
+    #      Looking at polars docs, not built in anyway
     #      so will have to implement manually or
     #      find a library for the following functions below
     pass

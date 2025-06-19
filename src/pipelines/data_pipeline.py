@@ -19,9 +19,13 @@ def run_data_pipeline(
     ma_configs: list[tuple[int, int]] | None = None,
     ewma_configs: list[dict] | None = None,
     returns_features: list[Literal["percent", "log"]] | None = None,
+    rolling_var_features: list[dict[str, int | list[Literal["std", "var"]]]]
+    | None = None,
 ) -> pl.LazyFrame:
     """Run the data pipeline for processing commodity futures data."""
     # TODO remove defaults after testing
+    # TODO unify rolling features, moving averages and returns features
+    # TODO improve data structure for customizable overrides for new feature creation
     if ma_configs is None:
         ma_configs = [
             (20, 1),
@@ -32,6 +36,14 @@ def run_data_pipeline(
         ]
     if returns_features is None:
         returns_features = ["percent", "log"]
+    if rolling_var_features is None:
+        rolling_var_features = [
+            {"window_size": 20, "stats": ["std", "var"]},
+            {"window_size": 50, "stats": ["std", "var"]},
+            {"window_size": 200, "stats": ["std", "var"]},
+            {"window_size": 365, "stats": ["std", "var"]},
+            {"window_size": 2 * 365, "stats": ["std", "var"]},
+        ]
 
     if ewma_configs is None:
         ewma_configs = [{"alpha": 0.1}, {"span": 20}, {"half_life": 10}]
@@ -54,6 +66,7 @@ def run_data_pipeline(
         #      these to take advantage of the function I found
         ma_data = process.exponential_weighted_moving_average(ma_data, ewma_configs)
     returns_data = process.add_returns(ma_data, returns_features)
+    var_data = process.add_rolling_stats(returns_data, rolling_var_features)
 
-    final_data = returns_data
+    final_data = var_data
     return final_data
