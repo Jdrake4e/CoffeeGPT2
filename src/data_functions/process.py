@@ -19,8 +19,8 @@ def _get_base_columns(lf: pl.LazyFrame) -> list[str]:
                 col == "Date",
                 "_ma_" in col,
                 "_ewma_" in col,
-                "_return" in col,
-                "_log_return" in col,
+                "_percent_return" in col if col.endswith("_log_return") else False,
+                "_log_return" in col if col.endswith("_percent_return") else False,
                 "_rolling_std_" in col,
                 "_rolling_var_" in col,
             ]
@@ -36,16 +36,16 @@ def _generate_column_alias(
     for param_name, param_value in params.items():
         # Sanitize param_name for alias (e.g., 'window_size' -> 'w')
         if param_name == "window_size":
-            alias_parts.append(f"w{param_value}")
+            alias_parts.append(f"_w{param_value}")
         elif param_name == "min_samples":
-            if param_value != params.get("window_size", 1):  # Only add if not default
+            if param_value != params.get("_window_size", 1):  # Only add if not default
                 alias_parts.append(f"ms{param_value}")
         elif param_name == "alpha":
-            alias_parts.append(f"a{param_value}")
+            alias_parts.append(f"_a{param_value}")
         elif param_name == "span":
-            alias_parts.append(f"s{param_value}")
+            alias_parts.append(f"_s{param_value}")
         elif param_name == "half_life":
-            alias_parts.append(f"hl{param_value}")
+            alias_parts.append(f"_hl{param_value}")
     return "_".join(alias_parts)
 
 
@@ -54,7 +54,7 @@ def _add_percent_returns(lf: pl.LazyFrame) -> pl.LazyFrame:
     base_columns = _get_base_columns(lf)
 
     expressions = [
-        (pl.col(col) / pl.col(col).shift(1) - 1).alias(f"{col}_return")
+        (pl.col(col) / pl.col(col).shift(1) - 1).alias(f"{col}_percent_return")
         for col in base_columns
     ]
 
@@ -397,26 +397,28 @@ def _fill_cubic_spline(lf: pl.LazyFrame) -> pl.LazyFrame:
     #      Looking at polars docs, not built in anyway
     #      so will have to implement manually or
     #      find a library for the following functions below
+    return lf  # Placeholder, as polars does not support cubic spline natively
     pass
 
 
 def _fill_b_spline(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using B-spline interpolation."""
+    # TODO Implement B-spline interpolation
+    return lf  # Placeholder, as polars does not support B-spline natively
     pass
 
 
 def _fill_chebyshev(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using Chebyshev interpolation."""
+    # TODO Implement Chebyshev interpolation
+    return lf  # Placeholder, as polars does not support Chebyshev natively
     pass
 
 
 def _fill_radial_basis_function(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Fill missing values using radial basis function interpolation."""
-    pass
-
-
-def add_features(lf: pl.LazyFrame) -> pl.LazyFrame:
-    """To be decided what features to add."""
+    # TODO Implement radial basis function interpolation
+    return lf  # Placeholder, as polars does not support RBF natively
     pass
 
 

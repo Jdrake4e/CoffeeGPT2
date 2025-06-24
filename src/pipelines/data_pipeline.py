@@ -35,14 +35,14 @@ def run_data_pipeline(
             (2 * 365, 1),
         ]
     if returns_features is None:
-        returns_features = ["percent", "log"]
+        returns_features = ["log"]
     if rolling_var_features is None:
         rolling_var_features = [
-            {"window_size": 20, "stats": ["std", "var"]},
-            {"window_size": 50, "stats": ["std", "var"]},
-            {"window_size": 200, "stats": ["std", "var"]},
-            {"window_size": 365, "stats": ["std", "var"]},
-            {"window_size": 2 * 365, "stats": ["std", "var"]},
+            {"window_size": 20, "stats": ["std"]},
+            {"window_size": 50, "stats": ["std"]},
+            {"window_size": 200, "stats": ["std"]},
+            {"window_size": 365, "stats": ["std"]},
+            {"window_size": 2 * 365, "stats": ["std"]},
         ]
 
     if ewma_configs is None:

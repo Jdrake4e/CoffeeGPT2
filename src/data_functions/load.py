@@ -32,7 +32,7 @@ def _futures_readin_bind(files: Sequence[os.PathLike[Any]]) -> pl.LazyFrame:
     numeric_columns = ["Price", "Open", "High", "Low", "Vol.", "Change %"]
     dtype_overrides = dict.fromkeys(numeric_columns, pl.Utf8)
 
-    lfs = [pl.scan_csv(file, schema_overrides=dtype_overrides) for file in files]
+    lfs = [pl.scan_csv(str(file), schema_overrides=dtype_overrides) for file in files]
     concat_lf = pl.concat(lfs, how="vertical_relaxed")
     schema_names = concat_lf.collect_schema().names()  # Get schema names once
     for col_name in numeric_columns:
@@ -140,7 +140,7 @@ def load_commodity_futures_by_folder(root_dir: str) -> dict[str, pl.LazyFrame]:
 
             if csv_file_paths:
                 folder_name = item_path.name
-                lf = _futures_readin_bind(csv_file_paths)
+                lf = _futures_readin_bind(csv_file_paths).drop("Change %")
                 data_dict[folder_name] = lf
     return data_dict
 
@@ -273,24 +273,15 @@ def concat_all_data(data: dict[str, pl.LazyFrame]) -> pl.LazyFrame:
     return result_lf
 
 
-if __name__ == "__main__":
-    # DEBUGGING CODE: disable in prod
-    commodity_futures = load_commodity_futures_by_folder(
-        r"data\raw\commodity_data\daily"
-    )
-    concat_data_df = concat_all_data(commodity_futures).collect()
+def load_preprocessed_data(
+    file_path: str = r"data\processed\pre_feature_engneering",
+) -> pl.LazyFrame:
+    """Load preprocessed data from a Parquet file into a LazyFrame."""
+    return pl.scan_parquet(file_path)
 
-    print("\nCollected final DataFrame (returned by concat_all_data_lazy):")
-    print(f"Shape of final DataFrame: {concat_data_df.shape}")
-    print("Head of final DataFrame:")
-    print(concat_data_df.head())
-    print("\nSchema of final DataFrame:")
-    print(concat_data_df.schema)
 
-    null_counts_df = concat_data_df.null_count()
-    print("\nDataFrame with Null Counts per Column (using df.null_count()):")
-    print(null_counts_df)
-
-    non_null_counts_df = concat_data_df.select(pl.all().count())
-    print("\nnon null counts per column:")
-    print(non_null_counts_df)
+def save_preprocessed_data(
+    lf: pl.LazyFrame, file_path: str = r"data\processed\pre_feature_engneering"
+) -> None:
+    """Save preprocessed data from a LazyFrame to a Parquet file."""
+    lf.collect().write_parquet(file_path)
