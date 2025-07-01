@@ -13,8 +13,6 @@ from typing import Any
 
 import polars as pl
 
-# TODO add function to load preprocessed data
-
 
 def _futures_readin_bind(files: Sequence[os.PathLike[Any]]) -> pl.LazyFrame:
     """Read multiple historical market data CSVs and bind them into one DataFrame.
@@ -127,8 +125,6 @@ def load_commodity_futures_by_folder(root_dir: str) -> dict[str, pl.LazyFrame]:
     if not path_obj.is_dir():
         raise ValueError(f"Provided path '{path_obj}' is not a directory.")
 
-    # TODO improve file tree traversal by building
-    #      a tree of all csvs in sub directories
     data_dict = {}
     for item_path in path_obj.iterdir():
         if item_path.is_dir():
