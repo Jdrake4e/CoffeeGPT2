@@ -176,8 +176,8 @@ def _determine_master_date_range(
                 pl.max("Date").alias("max_date_val"),
             ]
         )
-        # TODO when we add logging, wrap this block and catch specific errors
-        #      I will also have continue in the block
+        # TODO when I add logging, wrap this block and catch specific errors
+        #      I will also have a continue statement in the block
         collected_dates_df = min_max_lf.collect()
 
         if not collected_dates_df.is_empty():
@@ -244,10 +244,6 @@ def _join_lazyframes(
     return result_lf
 
 
-# TODO change to google doc string format,
-#      fill method will be handled outside later and not here
-#      via switch statement in a function call in process.py
-#      maintain track_nans for now; probs remove eventually
 def concat_all_data(data: dict[str, pl.LazyFrame]) -> pl.LazyFrame:
     """Concatenate multiple LazyFrames into one over a master date range.
 
@@ -270,14 +266,19 @@ def concat_all_data(data: dict[str, pl.LazyFrame]) -> pl.LazyFrame:
 
 
 def load_preprocessed_data(
-    file_path: str = r"data\processed\pre_feature_engneering",
+    file_path: Path = Path(
+        r"data\processed\pre_feature_engneering\preprocessed_data.parquet"
+    ),
 ) -> pl.LazyFrame:
     """Load preprocessed data from a Parquet file into a LazyFrame."""
     return pl.scan_parquet(file_path)
 
 
 def save_preprocessed_data(
-    lf: pl.LazyFrame, file_path: str = r"data\processed\pre_feature_engneering"
+    lf: pl.LazyFrame,
+    file_path: Path = Path(
+        r"data\processed\pre_feature_engneering\preprocessed_data.parquet"
+    ),
 ) -> None:
     """Save preprocessed data from a LazyFrame to a Parquet file."""
     lf.collect().write_parquet(file_path)

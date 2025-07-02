@@ -1,6 +1,7 @@
 """This module provide a pipeline for all data preprocccessing steps."""
 
 # from ..data_function as dataloaders
+from pathlib import Path
 from typing import Literal
 
 import polars as pl
@@ -8,9 +9,13 @@ import polars as pl
 from ..data_functions import load, process  # noqa: TID252
 
 
-# TODO figureout what type this will out put at the end, probs a torch dataloader
-# TODO add an option to load preprocessed data
-# TODO ensure processed data is saved if run
+def load_processed_data(path: Path) -> pl.LazyFrame:
+    """Load processed data from a specified path."""
+    full_data = load.load_preprocessed_data(path)
+    return full_data
+
+
+# TODO figure out what type this will out put at the end, probs a torch dataloader
 def run_data_pipeline(
     path: str = r"data\raw\commodity_data\daily",
     interpolation_type: str = "ffill",
@@ -26,6 +31,7 @@ def run_data_pipeline(
     # TODO remove defaults after testing
     # TODO unify rolling features, moving averages and returns features
     # TODO improve data structure for customizable overrides for new feature creation
+    # TODO move defaults to a testing file for unit tests
     if ma_configs is None:
         ma_configs = [
             (20, 1),
@@ -62,8 +68,6 @@ def run_data_pipeline(
     if ma_configs:
         ma_data = process.moving_average(ma_data, ma_configs)
     if ewma_configs:
-        # TODO switch to polars.Expr.ewm_mean_by and reverse the order of creating
-        #      these to take advantage of the function I found
         ma_data = process.exponential_weighted_moving_average(ma_data, ewma_configs)
     returns_data = process.add_returns(ma_data, returns_features)
     var_data = process.add_rolling_stats(returns_data, rolling_var_features)
